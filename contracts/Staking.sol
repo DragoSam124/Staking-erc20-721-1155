@@ -14,14 +14,11 @@ contract Staking {
     IERC1155 public erc1155;
     bool private openStaking = false;
 
-    struct Staker{
-        uint256 token20;
-        uint256[] token721;
-        uint256[] token1155;
-        uint256[] token1155Amt;    
-    }
-
-    mapping(address => Staker) private balance;
+    
+    mapping(address => uint256[]) public stakingERC1155Users;
+    mapping(address => uint256[]) public stakingERC721Users;
+    mapping(address => uint256[]) public staking1155Tokeninfo;
+    mapping(address => uint256) public stakingERC20Users;
 
     constructor() {    
     }
@@ -35,56 +32,60 @@ contract Staking {
 
     function DepositERC20(uint256 amount) external {
         erc20.transferFrom(msg.sender, address(this), amount);
-        balance[msg.sender].token20 += amount;
+        stakingERC20Users[msg.sender] += amount;
     }
 
     function DepositERC721(uint256 tokenId) external {
         erc721.transferFrom(msg.sender, address(this), tokenId);
-        balance[msg.sender].token721.push(tokenId);
+        stakingERC721Users[msg.sender].push(tokenId);
     }
 
     function DepositERC1155(uint256 tokenId, uint256 amount, bytes calldata data) external {
         erc1155.safeTransferFrom(msg.sender, address(this), tokenId, amount, data);
         uint256 idx;
-        for(idx = 0; idx < balance[msg.sender].token1155.length; idx++) {
-            if(balance[msg.sender].token1155[idx] == tokenId) break;
+        for(idx = 0; idx < staking1155Tokeninfo[msg.sender].length; idx++) {
+            if(staking1155Tokeninfo[msg.sender][idx] == tokenId) break;
         }
 
-        if(idx == balance[msg.sender].token1155.length) {
-            balance[msg.sender].token1155.push(tokenId);
-            balance[msg.sender].token1155Amt.push(amount);
+        if(idx == staking1155Tokeninfo[msg.sender].length) {
+            staking1155Tokeninfo[msg.sender].push(tokenId);
+            stakingERC1155Users[msg.sender].push(amount);
         } else {
-            balance[msg.sender].token1155Amt[idx] += amount;
+            staking1155Tokeninfo[msg.sender][idx] += tokenId;
+            stakingERC1155Users[msg.sender][idx] += amount;
         }
     }
 
     function Withdraw() external {
-        if(balance[msg.sender].token20 > 0) {
-            erc20.transfer(msg.sender, balance[msg.sender].token20);
+        if(stakingERC20Users[msg.sender] > 0) {
+            erc20.transfer(msg.sender, stakingERC20Users[msg.sender]);
         }
 
-        if(balance[msg.sender].token721.length > 0) {
-            for(uint256 i = 0; i < balance[msg.sender].token721.length; i++) {
-                erc721.transferFrom(address(this), msg.sender, balance[msg.sender].token721[i]);
+        if(stakingERC721Users[msg.sender].length > 0) {
+            for(uint256 i = 0; i < stakingERC721Users[msg.sender].length; i++) {
+                erc721.transferFrom(address(this), msg.sender, stakingERC721Users[msg.sender][i]);
             }
         }
 
-        if(balance[msg.sender].token1155.length > 0) {
-            erc1155.safeBatchTransferFrom(address(this), msg.sender, balance[msg.sender].token1155, balance[msg.sender].token1155Amt, "");
+        if(staking1155Tokeninfo[msg.sender].length > 0) {
+            erc1155.safeBatchTransferFrom(address(this), msg.sender, staking1155Tokeninfo[msg.sender], stakingERC1155Users[msg.sender], "");
         }
 
-        delete balance[msg.sender];
+        delete stakingERC20Users[msg.sender];
+        delete stakingERC721Users[msg.sender];
+        delete staking1155Tokeninfo[msg.sender];
+        delete stakingERC1155Users[msg.sender];
     }
 
     function balanceOf1155(address owner) external view returns(uint256[] memory, uint256[] memory) {
-        return (balance[owner].token1155, balance[owner].token1155Amt);
+        return (staking1155Tokeninfo[owner], stakingERC1155Users[owner]);
     }
 
     function balanceOf20(address owner) external view returns(uint256) {
-        return balance[owner].token20;
+        return stakingERC20Users[owner];
     }
 
     function balanceOf721(address owner) external view returns(uint256[] memory) {
-        return (balance[owner].token721);
+        return (stakingERC721Users[owner]);
     }
 }
